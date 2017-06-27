@@ -1,0 +1,118 @@
+---
+title: "Writeup Course Project Practical Machine Learning"
+author: "Lukas Meyer"
+date: "6/22/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## General Information
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Objective
+The goal of this analysis is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. The result will be a prediction model to predict 20 different test cases.
+
+## Loading libraries and the data
+Lets load our data sets (training and testing). We are going to set additional na strings in order to remove unnecessary division by zero or empty values that are present in the data set.
+```{r warning=FALSE, message=FALSE}
+library(caret)
+setwd('/Users/lmeyer/Documents/Data Science Projects/Coursera Course - Data Scienctists Toolbox/Course 8 - Practical Machine Learning')
+train <- read.csv('./pml-training.csv', na.strings=c('#DIV/0', '', 'NA') ,stringsAsFactors = F)
+validation <- read.csv('./pml-testing.csv', na.strings=c('#DIV/0', '', 'NA') ,stringsAsFactors = F)
+```
+## Data Exploration
+
+```{r }
+str(train,list.len=10)
+
+dim(train)
+```
+The first features appear to be only relevant for informational purposes. Also there exist a lot of features with 100% empty or NA values that are not needed. The data set contains a lot of features (160) therefore it would make a lot of sense to simplify our feature selection to decrease our model complexity.
+
+## Data Manipulation
+We are going to perfom some data manipulation in order to prepare our data sets to be used by our model. We are going to remove the first seven column because they are primarily informational hence won't support our model a lot. Furthermore we will remove all columns that have missing values as well remove columns with near zero variance in order to have a clean and tidy data set. 
+
+```{r}
+set.seed(12345)
+
+# Remove first seven columns
+train <- train[, 7:ncol(train)] 
+validation <- validation[, 7:ncol(validation)]
+
+# Keep only columns with all records. There are a lot of columns that contain only NA values thus cannot be used.
+not_na  <- apply(!is.na(train), 2, sum) > 19621 
+train <- train[, not_na]
+validation  <- validation[, not_na]
+
+# Remove features with near zero variance because they would not have a strong impact and would unnecessarily over-complicate our model.
+nzv_train <- nearZeroVar(train,saveMetrics=FALSE)
+if(length(nzv_train) > 0) {
+  train <- train[, -nzv_cols]
+}
+
+```
+
+After preparing and cleaning up our data sets we're going to split our training data into two separate data sets in order to select  our model and validate its performance. We'll use a 60/40 split
+
+```{r}
+inTrain = createDataPartition(train$classe, p = 0.6, list = F)
+training = train[ inTrain[,1],]
+testing = train[-inTrain[,1],]
+```
+
+## Model Definition
+We're going to use a tree based random forest model as well as a gradient boosting model and compare their performances. Furthermore we'll use repeated 10-fold cross validation for model training because our training data is rather large.
+
+```{r message=F, warning=F, cache=TRUE}
+# 2-fold cross validation
+ctl <- trainControl(method = "repeatedcv", number = 10, allowParallel = TRUE)
+
+# Model 1 using rf
+fit_rf <- train(classe ~ .,
+    data = training,
+    method = "rf",
+    trControl=ctl)
+
+# Model 2 using gbm
+fit_gbm <- train(classe ~ .,
+    data = training,
+    method = "gbm",
+    trControl=ctl,
+    verbose=FALSE)
+
+```
+
+## Model Selection
+After training our two models we'll be comparing each models performance against our testing set. We'll create a confusion matrix to show the accuracy.
+```{r}
+## See how our RF model performs
+pred_rf <- predict(fit_rf,testing[,!(names(testing) %in% "classe")])
+confusionMatrix(testing$classe,pred_rf)$overall[1]
+
+## See how our GBM model performs
+pred_gbm <- predict(fit_gbm,testing[,!(names(testing) %in% "classe")])
+confusionMatrix(testing$classe,pred_gbm)$overall[1]
+
+```
+We can observe that both models have a very high accuracy hence they are equally good for predicting our validation classes. Random Forest has a slighthly higher accuracy hence we'll be using RF for our final prediction.
+
+```{r}
+
+validation$final_prediction <- predict(fit_rf, validation)
+table(validation$final_prediction)
+
+
+oos <- outOfSampleError.accuracy <- sum(pred_rf == testing$classe)/length(pred_rf)
+e <- round(oos, digits = 2)
+print(e)
+
+```
+
+## Conclusion
+Using a random forest model we get a very high accuracy and an out of sample error of y. This gives us a high confidence in predicting the training classes for our test set. 
