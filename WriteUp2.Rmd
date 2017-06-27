@@ -67,17 +67,18 @@ testing = train[-inTrain[,1],]
 ```
 
 ## Model Definition
-We're going to use a tree based random forest model as well as a gradient boosting model and compare their performances. Furthermore we'll use repeated 10-fold cross validation for model training because our training data is rather large.
+We're going to use a tree based random forest model as well as a gradient boosting model and compare their performances. Furthermore we'll use 2-fold cross validation for model training because our training data is rather large but it is faster than 10-fold cv. We can still increase if our model accuracy is low.
 
 ```{r message=F, warning=F, cache=TRUE}
 # 2-fold cross validation
-ctl <- trainControl(method = "repeatedcv", number = 10, allowParallel = TRUE)
+ctl <- trainControl(method = "cv", number = 2, allowParallel = TRUE)
 
 # Model 1 using rf
 fit_rf <- train(classe ~ .,
     data = training,
     method = "rf",
-    trControl=ctl)
+    trControl=ctl,
+    importance = TRUE)
 
 # Model 2 using gbm
 fit_gbm <- train(classe ~ .,
@@ -88,31 +89,43 @@ fit_gbm <- train(classe ~ .,
 
 ```
 
+```{r }
+rf_imp <- varImp(fit_rf, scale=FALSE)
+plot(fit_rf$finalModel)
+plot(rf_imp, top=10)
+```
+Looking at our variable importance we can see that overall the variables 'num_window', 'roll_belt', 'pitch_forearm', 'magnet_dumbbell_z' and 'pitch_belt' are the top 5 features. Furthermore there is no high variance among the different classes. When plotting the different trees we can observe that for all classes we have a very quick reduction of error rate within the first 20 trees. 
+
 ## Model Selection
 After training our two models we'll be comparing each models performance against our testing set. We'll create a confusion matrix to show the accuracy.
-```{r}
+```{r message=FALSE, warning=FALSE}
 ## See how our RF model performs
 pred_rf <- predict(fit_rf,testing[,!(names(testing) %in% "classe")])
-confusionMatrix(testing$classe,pred_rf)$overall[1]
+acc_rf <- round(confusionMatrix(testing$classe,pred_rf)$overall[1],5)
+oos_rf <- round(1-confusionMatrix(testing$classe,pred_rf)$overall[1],5)
 
 ## See how our GBM model performs
 pred_gbm <- predict(fit_gbm,testing[,!(names(testing) %in% "classe")])
-confusionMatrix(testing$classe,pred_gbm)$overall[1]
+acc_gbm <- round(confusionMatrix(testing$classe,pred_gbm)$overall[1],5)
+oos_gbm <- round(1-confusionMatrix(testing$classe,pred_gbm)$overall[1],5)
+
+
+print(paste0("Accuracy Random Forest: ", acc_rf))
+print(paste0("Out of Sample Error RF: ", oos_rf))
+
+print(paste0("Accuracy Gradient Boosting: ", acc_gbm))
+print(paste0("Out of Sample Error GBM: ", oos_gbm))
+
 
 ```
-We can observe that both models have a very high accuracy hence they are equally good for predicting our validation classes. Random Forest has a slighthly higher accuracy hence we'll be using RF for our final prediction.
+We can observe that both models have a very high accuracy hence they are equally good for predicting our validation classes. Random Forest has a slighthly higher accuracy `r acc_rf` and a smaller out of sample error of `r oos_rf` hence we'll be using RF for our final prediction.
 
+## Final Prediction for Submission
+Based on our model we'll predict the classe of our test set with the result shown below.
 ```{r}
-
 validation$final_prediction <- predict(fit_rf, validation)
-table(validation$final_prediction)
-
-
-oos <- outOfSampleError.accuracy <- sum(pred_rf == testing$classe)/length(pred_rf)
-e <- round(oos, digits = 2)
-print(e)
-
+print(validation$final_prediction)
 ```
 
 ## Conclusion
-Using a random forest model we get a very high accuracy and an out of sample error of y. This gives us a high confidence in predicting the training classes for our test set. 
+Using a random forest model we get a very high accuracy and an out of sample error of `r oos_rf`. This gives us a high confidence in predicting the training classes for our test set. 
