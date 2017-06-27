@@ -94,6 +94,7 @@ rf_imp <- varImp(fit_rf, scale=FALSE)
 plot(fit_rf$finalModel)
 plot(rf_imp, top=10)
 ```
+
 Looking at our variable importance we can see that overall the variables 'num_window', 'roll_belt', 'pitch_forearm', 'magnet_dumbbell_z' and 'pitch_belt' are the top 5 features. Furthermore there is no high variance among the different classes. When plotting the different trees we can observe that for all classes we have a very quick reduction of error rate within the first 20 trees. 
 
 ## Model Selection
